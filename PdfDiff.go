@@ -26,14 +26,18 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 		// Extract the images from the PDFs or create a white image if the page does not exist
 		if j < doc1.NumPage() {
 			img1, err = doc1.Image(j)
-			checkError(err)
+			if checkError(err) != nil {
+				continue
+			}
 		} else {
 			img1 = image.NewRGBA(image.Rect(0, 0, 595, 842)) // dimensions of an A4 page in points
 		}
 
 		if j < doc2.NumPage() {
 			img2, err = doc2.Image(j)
-			checkError(err)
+			if checkError(err) != nil {
+				continue
+			}
 		} else {
 			img2 = image.NewRGBA(image.Rect(0, 0, 595, 842)) // dimensions of an A4 page in points
 		}
@@ -61,7 +65,9 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 		// Save the difference image
 		diffImgPath := fmt.Sprintf("differences_%d.png", j)
 		err = imaging.Save(diffImg, diffImgPath)
-		checkError(err)
+		if checkError(err) != nil {
+			continue
+		}
 
 		// Signal that the job is done
 		done <- true
@@ -75,7 +81,7 @@ func main() {
 	offsetFlag := flag.Int("offset", 0, "the number of pages to skip in the second PDF")
 	startFlag := flag.Int("start", 0, "the page of the first PDF to start the offset")
 	orientationFlag := flag.String("orientation", "", "the orientation of the PDF (P for portrait, L for landscape)")
-	printSizeFlag := flag.String("printsize", "A3", "Size of printed PDF A4,A3,A2...)")
+	printSizeFlag := flag.String("printsize", "A3", "Size of printed PDF A4,A3,A2...")
 	outputFlag := flag.String("output", "differences.pdf", "the name of the output PDF file")
 	workersFlag := flag.Int("workers", 30, "the number of workers to use")
 
@@ -94,11 +100,17 @@ func main() {
 
 	// Open the PDF files
 	doc1, err := fitz.New(file1)
-	checkError(err)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 	defer doc1.Close()
 
 	doc2, err := fitz.New(file2)
-	checkError(err)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 	defer doc2.Close()
 
 	// Check that the offset and start are valid
@@ -130,7 +142,9 @@ func main() {
 	// If the orientation has not been specified, set the orientation based on the dimensions of the first page
 	if *orientationFlag == "" {
 		img1, err := doc1.Image(0)
-		checkError(err)
+		if checkError(err) != nil {
+			return
+		}
 		if img1.Bounds().Dx() > img1.Bounds().Dy() {
 			*orientationFlag = "L"
 		} else {
@@ -199,7 +213,9 @@ func main() {
 		}
 		// Save the PDF
 		err = pdf.OutputFileAndClose(*outputFlag)
-		checkError(err)
+		if checkError(err) != nil {
+			return
+		}
 		fmt.Printf("The difference images have been merged into %s\n", *outputFlag)
 
 		// Update the count of completed operations and print the progress percentage
@@ -210,10 +226,13 @@ func main() {
 	// Remove the difference images
 	if *cleanFlag {
 		files, err := filepath.Glob("differences_*.png")
-		checkError(err)
+		if checkError(err) != nil {
+			return
+		}
 		for _, f := range files {
 			if err := os.Remove(f); err != nil {
 				checkError(err)
+				continue
 			}
 		}
 		fmt.Println("The difference images have been removed")
@@ -238,10 +257,11 @@ func max(a, b int) int {
 	return b
 }
 
-// checkError prints an error message and terminates the program if err is not nil.
-func checkError(err error) {
+// checkError prints an error message and returns the error if it is not nil.
+func checkError(err error) error {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
+	return nil
 }
