@@ -26,18 +26,14 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 		// Extract the images from the PDFs or create a white image if the page does not exist
 		if j < doc1.NumPage() {
 			img1, err = doc1.Image(j)
-			if err != nil {
-				panic(err)
-			}
+			checkError(err)
 		} else {
 			img1 = image.NewRGBA(image.Rect(0, 0, 595, 842)) // dimensions of an A4 page in points
 		}
 
 		if j < doc2.NumPage() {
 			img2, err = doc2.Image(j)
-			if err != nil {
-				panic(err)
-			}
+			checkError(err)
 		} else {
 			img2 = image.NewRGBA(image.Rect(0, 0, 595, 842)) // dimensions of an A4 page in points
 		}
@@ -65,9 +61,7 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 		// Save the difference image
 		diffImgPath := fmt.Sprintf("differences_%d.png", j)
 		err = imaging.Save(diffImg, diffImgPath)
-		if err != nil {
-			panic(err)
-		}
+		checkError(err)
 
 		// Signal that the job is done
 		done <- true
@@ -83,7 +77,7 @@ func main() {
 	orientationFlag := flag.String("orientation", "", "the orientation of the PDF (P for portrait, L for landscape)")
 	printSizeFlag := flag.String("printsize", "A3", "Size of printed PDF A4,A3,A2...)")
 	outputFlag := flag.String("output", "differences.pdf", "the name of the output PDF file")
-	workersFlag := flag.Int("workers", 100, "the number of workers to use")
+	workersFlag := flag.Int("workers", 30, "the number of workers to use")
 
 	// Parse the flags
 	flag.Parse()
@@ -100,15 +94,11 @@ func main() {
 
 	// Open the PDF files
 	doc1, err := fitz.New(file1)
-	if err != nil {
-		panic(err)
-	}
+	checkError(err)
 	defer doc1.Close()
 
 	doc2, err := fitz.New(file2)
-	if err != nil {
-		panic(err)
-	}
+	checkError(err)
 	defer doc2.Close()
 
 	// Check that the offset and start are valid
@@ -129,7 +119,7 @@ func main() {
 	}
 
 	// Calculate the total number of operations
-	totalOps := doc1.NumPage()
+	totalOps := max(doc1.NumPage(), doc2.NumPage())
 	if *mergeFlag {
 		totalOps++ // for merging the images into a PDF
 	}
@@ -140,9 +130,7 @@ func main() {
 	// If the orientation has not been specified, set the orientation based on the dimensions of the first page
 	if *orientationFlag == "" {
 		img1, err := doc1.Image(0)
-		if err != nil {
-			panic(err)
-		}
+		checkError(err)
 		if img1.Bounds().Dx() > img1.Bounds().Dy() {
 			*orientationFlag = "L"
 		} else {
@@ -154,14 +142,16 @@ func main() {
 	pdf := gofpdf.New(*orientationFlag, "mm", *printSizeFlag, "")
 
 	// Create a channel for the jobs
-	jobs := make(chan int, *workersFlag)
+	jobs := make(chan int, max(doc1.NumPage(), doc2.NumPage()))
 
 	// Create a channel to signal job completion
 	done := make(chan bool)
 
 	// Create the workers
 	for w := 1; w <= *workersFlag; w++ {
-		go worker(w, jobs, done, doc1, doc2, mergeFlag, totalOps)
+		go func(id int) {
+			worker(id, jobs, done, doc1, doc2, mergeFlag, totalOps)
+		}(w)
 	}
 
 	// Initialize the count of completed operations
@@ -209,9 +199,7 @@ func main() {
 		}
 		// Save the PDF
 		err = pdf.OutputFileAndClose(*outputFlag)
-		if err != nil {
-			panic(err)
-		}
+		checkError(err)
 		fmt.Printf("The difference images have been merged into %s\n", *outputFlag)
 
 		// Update the count of completed operations and print the progress percentage
@@ -222,12 +210,10 @@ func main() {
 	// Remove the difference images
 	if *cleanFlag {
 		files, err := filepath.Glob("differences_*.png")
-		if err != nil {
-			panic(err)
-		}
+		checkError(err)
 		for _, f := range files {
 			if err := os.Remove(f); err != nil {
-				panic(err)
+				checkError(err)
 			}
 		}
 		fmt.Println("The difference images have been removed")
@@ -250,4 +236,12 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// checkError prints an error message and terminates the program if err is not nil.
+func checkError(err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
