@@ -20,11 +20,26 @@ func brightness(c color.Color) uint32 {
 
 func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2 *fitz.Document, mergeFlag *bool, totalOps int) {
 	for j := range jobs {
-		img1 := getImage(doc1, j)
-		img2 := getImage(doc2, j)
+		var img1, img2 image.Image
+		var err error
 
-		if img1 == nil || img2 == nil {
-			continue
+		// Extract the images from the PDFs or create a white image if the page does not exist
+		if j < doc1.NumPage() {
+			img1, err = doc1.Image(j)
+			if checkError(err) != nil {
+				continue
+			}
+		} else {
+			img1 = image.NewRGBA(image.Rect(0, 0, 595, 842)) // dimensions of an A4 page in points
+		}
+
+		if j < doc2.NumPage() {
+			img2, err = doc2.Image(j)
+			if checkError(err) != nil {
+				continue
+			}
+		} else {
+			img2 = image.NewRGBA(image.Rect(0, 0, 595, 842)) // dimensions of an A4 page in points
 		}
 
 		// Create an image to show the differences
@@ -253,16 +268,4 @@ func checkError(err error) error {
 		return err
 	}
 	return nil
-}
-
-func getImage(doc *fitz.Document, pageIndex int) image.Image {
-	if pageIndex < doc.NumPage() {
-		img, err := doc.Image(pageIndex)
-		if checkError(err) != nil {
-			return nil
-		}
-		return img
-	} else {
-		return image.NewRGBA(image.Rect(0, 0, 595, 842)) // dimensions of an A4 page in points
-	}
 }
