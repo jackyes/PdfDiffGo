@@ -15,7 +15,7 @@ import (
 
 func brightness(c color.Color) uint32 {
 	r, g, b, _ := c.RGBA()
-	return r*r + g*g + b*b // calculate brightness as the sum of the squares of the RGB components
+	return uint32(0.299*float32(r) + 0.587*float32(g) + 0.114*float32(b)) // calculate brightness using the luma formula
 }
 
 func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2 *fitz.Document, mergeFlag *bool, totalOps int) {
