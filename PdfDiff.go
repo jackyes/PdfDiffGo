@@ -22,7 +22,7 @@ func brightness(c color.Color) uint32 {
 	return uint32(0.299*float32(r) + 0.587*float32(g) + 0.114*float32(b)) // calculate brightness using the luma formula
 }
 
-func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2 *fitz.Document, mergeFlag *bool, totalOps int) {
+func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2 *fitz.Document, mergeFlag *bool, offset int, startOffset int, totalOps int) {
 	for j := range jobs {
 		var img1, img2 image.Image
 		var err error
@@ -39,9 +39,14 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 			img1 = image.NewRGBA(image.Rect(0, 0, 595, 842)) // dimensions of an A4 page in points
 		}
 
-		if j < doc2.NumPage() {
+		pagToCompare := j
+		if j >= startOffset-1 {
+			pagToCompare = j + offset
+		}
+
+		if pagToCompare < doc2.NumPage() {
 			mutex.Lock()
-			img2, err = doc2.Image(j)
+			img2, err = doc2.Image(pagToCompare)
 			mutex.Unlock()
 			if checkError(err) != nil {
 				continue
@@ -91,7 +96,7 @@ func main() {
 	mergeFlag := flag.Bool("merge", false, "merge the difference images into a single PDF")
 	cleanFlag := flag.Bool("clean", false, "remove the difference images after processing")
 	offsetFlag := flag.Int("offset", 0, "the number of pages to skip in the second PDF")
-	startFlag := flag.Int("start", 0, "the page of the first PDF to start the offset")
+	startOffsetFlag := flag.Int("startoffset", 0, "the page of the first PDF to start the offset")
 	orientationFlag := flag.String("orientation", "", "the orientation of the PDF (P for portrait, L for landscape)")
 	printSizeFlag := flag.String("printsize", "A3", "Size of printed PDF A4,A3,A2...")
 	outputFlag := flag.String("output", "differences.pdf", "the name of the output PDF file")
@@ -106,7 +111,7 @@ func main() {
 	}
 	// Check that two arguments have been passed
 	if flag.NArg() != 2 {
-		fmt.Println("Usage: [-merge] [-clean] [-printsize A4|A3|A2|A1|A0] [-offset n] [-start n] [-orientation P|L] [-output output.pdf] [-workers n] <file1.pdf> <file2.pdf>")
+		fmt.Println("Usage: [-merge] [-clean] [-printsize A4|A3|A2|A1|A0] [-offset n] [-startoffset n] [-orientation P|L] [-output output.pdf] [-workers n] <file1.pdf> <file2.pdf>")
 		os.Exit(1)
 	}
 
@@ -129,12 +134,12 @@ func main() {
 	}
 	defer doc2.Close()
 
-	// Check that the offset and start are valid
+	// Check that the offset and startoffset are valid
 	if *offsetFlag < 0 || *offsetFlag >= doc2.NumPage() {
 		panic("The offset is invalid")
 	}
-	if *startFlag < 0 || *startFlag >= doc1.NumPage() {
-		panic("The start is invalid")
+	if *startOffsetFlag < 0 || *startOffsetFlag >= doc1.NumPage() {
+		panic("The startOffset is invalid")
 	}
 
 	// Check that the orientation is valid
@@ -180,7 +185,7 @@ func main() {
 	// Create the workers
 	for w := 1; w <= *workersFlag; w++ {
 		go func(id int) {
-			worker(id, jobs, done, doc1, doc2, mergeFlag, totalOps)
+			worker(id, jobs, done, doc1, doc2, mergeFlag, *offsetFlag, *startOffsetFlag, totalOps)
 		}(w)
 	}
 
