@@ -7,11 +7,15 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 
 	"github.com/disintegration/imaging"
 	"github.com/gen2brain/go-fitz"
 	"github.com/jung-kurt/gofpdf"
 )
+
+var mutex = &sync.Mutex{}
 
 func brightness(c color.Color) uint32 {
 	r, g, b, _ := c.RGBA()
@@ -25,7 +29,9 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 
 		// Extract the images from the PDFs or create a white image if the page does not exist
 		if j < doc1.NumPage() {
+			mutex.Lock()
 			img1, err = doc1.Image(j)
+			mutex.Unlock()
 			if checkError(err) != nil {
 				continue
 			}
@@ -34,7 +40,9 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 		}
 
 		if j < doc2.NumPage() {
+			mutex.Lock()
 			img2, err = doc2.Image(j)
+			mutex.Unlock()
 			if checkError(err) != nil {
 				continue
 			}
@@ -87,11 +95,15 @@ func main() {
 	orientationFlag := flag.String("orientation", "", "the orientation of the PDF (P for portrait, L for landscape)")
 	printSizeFlag := flag.String("printsize", "A3", "Size of printed PDF A4,A3,A2...")
 	outputFlag := flag.String("output", "differences.pdf", "the name of the output PDF file")
-	workersFlag := flag.Int("workers", 30, "the number of workers to use")
+	workersFlag := flag.Int("workers", 0, "the number of workers to use. (Default: CPU Count)")
 
 	// Parse the flags
 	flag.Parse()
 
+	// Check if the workers flag has been set
+	if *workersFlag == 0 {
+		*workersFlag = runtime.NumCPU()
+	}
 	// Check that two arguments have been passed
 	if flag.NArg() != 2 {
 		fmt.Println("Usage: [-merge] [-clean] [-printsize A4|A3|A2|A1|A0] [-offset n] [-start n] [-orientation P|L] [-output output.pdf] [-workers n] <file1.pdf> <file2.pdf>")
