@@ -1,0 +1,45 @@
+# This is an example .goreleaser.yml file. You can customize it as per your needs.
+before:
+  hooks:
+    - go mod download
+    - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    main: ./cmd/main.go
+    id: "PdfDiffGo"
+    binary: "PdfDiffGo"
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - 386
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    hooks:
+      post:
+        - echo "Binary '{{ .Path }}' was built for '{{ .Os }}/{{ .Arch }}'"
+
+archives:
+  - format: tar.gz
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    files:
+      - none*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
