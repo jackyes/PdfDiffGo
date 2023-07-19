@@ -148,19 +148,23 @@ func main() {
 
 	// Check that the offset and startoffset are valid
 	if *offsetFlag < 0 || *offsetFlag >= doc2.NumPage() {
-		panic("The offset is invalid")
+		fmt.Fprintf(os.Stderr, "Error: The offset is invalid. It should be between 0 and %d.\n", doc2.NumPage()-1)
+		os.Exit(1)
 	}
 	if *startOffsetFlag < 0 || *startOffsetFlag >= doc1.NumPage() {
-		panic("The startOffset is invalid")
+		fmt.Fprintf(os.Stderr, "Error: The startOffset is invalid. It should be between 0 and %d.\n", doc1.NumPage()-1)
+		os.Exit(1)
 	}
-
 	// Check that the orientation is valid
 	if *orientationFlag != "" && *orientationFlag != "P" && *orientationFlag != "L" {
-		panic("The orientation is invalid")
+		fmt.Fprintf(os.Stderr, "Error: The orientation is invalid. It should be either 'P' or 'L'.\n")
+		os.Exit(1)
 	}
+
 	// Check that the print size is valid
 	if *printSizeFlag != "A4" && *printSizeFlag != "A3" && *printSizeFlag != "A2" && *printSizeFlag != "A1" && *printSizeFlag != "A0" {
-		panic("Invalid print size")
+		fmt.Fprintf(os.Stderr, "Error: Invalid print size. It should be one of 'A4', 'A3', 'A2', 'A1', or 'A0'.\n")
+		os.Exit(1)
 	}
 
 	// Calculate the total number of operations
