@@ -17,9 +17,10 @@ import (
 
 var mutex = &sync.Mutex{}
 
+// brightness calculates the brightness of a color using the luma formula.
 func brightness(c color.Color) uint32 {
 	r, g, b, _ := c.RGBA()
-	return uint32(0.299*float32(r) + 0.587*float32(g) + 0.114*float32(b)) // calculate brightness using the luma formula
+	return uint32(0.299*float32(r) + 0.587*float32(g) + 0.114*float32(b))
 }
 
 func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2 *fitz.Document, mergeFlag *bool, offset int, startOffset int, totalOps int) {
@@ -118,6 +119,17 @@ func main() {
 	// Get the paths of the PDF files from the command line arguments
 	file1 := flag.Arg(0)
 	file2 := flag.Arg(1)
+
+	// Check if the files exist
+	if _, err := os.Stat(file1); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Error: file %s does not exist\n", file1)
+		os.Exit(1)
+	}
+
+	if _, err := os.Stat(file2); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Error: file %s does not exist\n", file2)
+		os.Exit(1)
+	}
 
 	// Open the PDF files
 	doc1, err := fitz.New(file1)
