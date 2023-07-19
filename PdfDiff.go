@@ -12,7 +12,7 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/gen2brain/go-fitz"
-	"github.com/jung-kurt/gofpdf"
+	"github.com/phpdave11/gofpdf"
 )
 
 var mutex = &sync.Mutex{}
