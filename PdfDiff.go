@@ -28,6 +28,25 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 		var img1, img2 image.Image
 		var err error
 
+		// If we've reached the startOffset, create images for the pages from startOffset to startOffset+offset in file2
+		if j == startOffset {
+			for i := startOffset; i < startOffset+offset; i++ {
+				if i < doc2.NumPage() {
+					mutex.Lock()
+					img, err := doc2.Image(i - 1)
+					mutex.Unlock()
+					if checkError(err) != nil {
+						continue
+					}
+					imgPath := fmt.Sprintf("differences_%d.png", i)
+					err = imaging.Save(img, imgPath)
+					if checkError(err) != nil {
+						continue
+					}
+				}
+			}
+		}
+
 		// Extract the images from the PDFs or create a white image if the page does not exist
 		if j < doc1.NumPage() {
 			mutex.Lock()
@@ -41,7 +60,7 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 		}
 
 		pagToCompare := j
-		if j >= startOffset-1 {
+		if j >= startOffset {
 			pagToCompare = j + offset
 		}
 
@@ -82,6 +101,9 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 
 		// Save the difference image
 		diffImgPath := fmt.Sprintf("differences_%d.png", j)
+		if j >= startOffset {
+			diffImgPath = fmt.Sprintf("differences_%d.png", j+offset)
+		}
 		err = imaging.Save(diffImg, diffImgPath)
 		if checkError(err) != nil {
 			continue
@@ -227,7 +249,7 @@ func main() {
 
 	// Add the images to the PDF in the correct order
 	if *mergeFlag {
-		for i := 0; i < max(doc1.NumPage(), doc2.NumPage()); i++ {
+		for i := 0; i < max(doc1.NumPage()+*offsetFlag, doc2.NumPage()+*offsetFlag); i++ {
 			pdf.AddPage()
 			// Calculate the dimensions of the image so that it fits the PDF page
 			imgOptions := gofpdf.ImageOptions{
@@ -235,6 +257,7 @@ func main() {
 				ReadDpi:               true,
 				AllowNegativePosition: true,
 			}
+			fmt.Printf(" . ")
 			diffImgPath := fmt.Sprintf("differences_%d.png", i)
 			imgInfo := pdf.RegisterImageOptions(diffImgPath, imgOptions)
 			imgW, imgH := imgInfo.Extent()
