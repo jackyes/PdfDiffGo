@@ -15,6 +15,7 @@ import (
 	"github.com/phpdave11/gofpdf"
 )
 
+// Mutex to avoid race conditions when multiple goroutines access the same memory
 var mutex = &sync.Mutex{}
 
 // brightness calculates the brightness of a color using the luma formula.
@@ -23,6 +24,8 @@ func brightness(c color.Color) uint32 {
 	return uint32(0.299*float32(r) + 0.587*float32(g) + 0.114*float32(b))
 }
 
+// worker is a function that will be run in a separate goroutine. It processes jobs from the jobs channel and sends a signal to the done channel when it finishes a job.
+// It takes images from two PDF documents and compares them, creating a new image that highlights the differences.
 func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2 *fitz.Document, mergeFlag *bool, offset int, startOffset int, totalOps int) {
 	for j := range jobs {
 		var img1, img2 image.Image
@@ -153,19 +156,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Open the PDF files
+	// Open the first PDF file
 	doc1, err := fitz.New(file1)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	// Ensure the document is closed after use
 	defer doc1.Close()
 
+	// Open the second PDF file
 	doc2, err := fitz.New(file2)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	// Ensure the document is closed after use
 	defer doc2.Close()
 
 	// Check that the offset and startoffset are valid
@@ -303,6 +309,7 @@ func main() {
 	}
 }
 
+// min returns the smaller of two float64 numbers.
 func min(a, b float64) float64 {
 	if a < b {
 		return a
@@ -310,6 +317,7 @@ func min(a, b float64) float64 {
 	return b
 }
 
+// max returns the larger of two int numbers.
 func max(a, b int) int {
 	if a > b {
 		return a
