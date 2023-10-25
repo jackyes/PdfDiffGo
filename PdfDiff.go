@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -21,7 +22,13 @@ var mutex = &sync.Mutex{}
 // brightness calculates the brightness of a color using the luma formula.
 func brightness(c color.Color) uint32 {
 	r, g, b, _ := c.RGBA()
-	return uint32(0.299*float32(r) + 0.587*float32(g) + 0.114*float32(b))
+	// Precompute the coefficients to avoid recalculating them on every call.
+	const rCoeff = 0.299
+	const gCoeff = 0.587
+	const bCoeff = 0.114
+
+	// Calculate the brightness using the luma formula.
+	return uint32(rCoeff*float32(r) + gCoeff*float32(g) + bCoeff*float32(b))
 }
 
 // worker is a function that will be run in a separate goroutine. It processes jobs from the jobs channel and sends a signal to the done channel when it finishes a job.
@@ -311,18 +318,12 @@ func main() {
 
 // min returns the smaller of two float64 numbers.
 func min(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
+	return math.Min(a, b)
 }
 
 // max returns the larger of two int numbers.
 func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
+	return int(math.Max(float64(a), float64(b)))
 }
 
 // checkError prints an error message and returns the error if it is not nil.
