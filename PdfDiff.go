@@ -7,7 +7,6 @@ import (
 	"image/color"
 	"math"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sync"
 
@@ -260,17 +259,21 @@ func main() {
 		fmt.Printf("%.2f%% completed\n", float64(completedOps)/float64(totalOps)*100)
 	}
 
+	// Add a progress bar to indicate the progress of the merge
+	progress := 0.0
+	fmt.Printf("Merging difference images...")
+
 	// Add the images to the PDF in the correct order
 	if *mergeFlag {
+		imgOptions := gofpdf.ImageOptions{
+			ImageType:             "",
+			ReadDpi:               true,
+			AllowNegativePosition: true,
+		}
 		for i := 0; i < max(doc1.NumPage()+*offsetFlag, doc2.NumPage()+*offsetFlag); i++ {
 			pdf.AddPage()
+
 			// Calculate the dimensions of the image so that it fits the PDF page
-			imgOptions := gofpdf.ImageOptions{
-				ImageType:             "",
-				ReadDpi:               true,
-				AllowNegativePosition: true,
-			}
-			fmt.Printf(" . ")
 			diffImgPath := fmt.Sprintf("differences_%d.png", i)
 			imgInfo := pdf.RegisterImageOptions(diffImgPath, imgOptions)
 			imgW, imgH := imgInfo.Extent()
@@ -278,36 +281,49 @@ func main() {
 			scale := min(pdfW/imgW, pdfH/imgH)
 			imgW *= scale
 			imgH *= scale
+
 			// Calculate the position of the image so that it is centered on the page
 			x := (pdfW - imgW) / 2
 			y := (pdfH - imgH) / 2
+
 			// Add the image to the PDF
 			pdf.ImageOptions(diffImgPath, x, y, imgW, imgH, false, imgOptions, 0, "")
+
+			// Update the progress percentage
+			progress = float64(i+1) / float64(max(doc1.NumPage()+*offsetFlag, doc2.NumPage()+*offsetFlag)) * 100.0
+
+			// Print the progress percentage
+			fmt.Printf("\rProgress: %.2f%%", progress)
 		}
+		fmt.Println()
+
 		// Save the PDF
-		err = pdf.OutputFileAndClose(*outputFlag)
+		err := pdf.OutputFileAndClose(*outputFlag)
 		if checkError(err) != nil {
 			return
 		}
 		fmt.Printf("The difference images have been merged into %s\n", *outputFlag)
 
-		// Update the count of completed operations and print the progress percentage
+		// Update the count of completed operations and print the final message
 		completedOps++
-		fmt.Printf("The difference images have been merged into a PDF (%.2f%% completed)\n", float64(completedOps)/float64(totalOps)*100)
+		fmt.Printf("The difference images have been merged into a PDF (100.00%% completed)\n")
 	}
 
-	// Remove the difference images
 	if *cleanFlag {
-		files, err := filepath.Glob("differences_*.png")
-		if checkError(err) != nil {
-			return
+		// Get the paths of the difference images.
+		var differenceImagePaths []string
+		for i := 0; i < max(doc1.NumPage()+*offsetFlag, doc2.NumPage()+*offsetFlag); i++ {
+			differenceImagePaths = append(differenceImagePaths, fmt.Sprintf("differences_%d.png", i))
 		}
-		for _, f := range files {
-			if err := os.Remove(f); err != nil {
-				checkError(err)
-				continue
+
+		// Remove the difference images.
+		for _, imagePath := range differenceImagePaths {
+			err := os.Remove(imagePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error removing difference image: %v\n", err)
 			}
 		}
+
 		fmt.Println("The difference images have been removed")
 
 		// Update the count of completed operations and print the progress percentage
