@@ -24,6 +24,8 @@ Flags
     -orientation: The orientation of the PDF (P for portrait, L for landscape).
     -output: The name of the output PDF file.
     -workers: The number of workers to use for processing.
+    -sidebyside: create a side-by-side comparison of the two PDFs.  
+    -verticalalign: align the documents vertically in the combined image
 
 Usage example  
 
