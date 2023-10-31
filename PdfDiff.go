@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 
@@ -32,7 +33,7 @@ func brightness(c color.Color) uint32 {
 
 // worker is a function that will be run in a separate goroutine. It processes jobs from the jobs channel and sends a signal to the done channel when it finishes a job.
 // It takes images from two PDF documents and compares them, creating a new image that highlights the differences.
-func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2 *fitz.Document, mergeFlag *bool, offset int, startOffset int, totalOps int) {
+func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2 *fitz.Document, mergeFlag *bool, offset int, startOffset int, totalOps int, sideBySideFlag *bool, verticalAlignFlag *bool) {
 	for j := range jobs {
 		var img1, img2 image.Image
 		var err error
@@ -118,6 +119,52 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 			continue
 		}
 
+		if *sideBySideFlag {
+			var combinedWidth, combinedHeight int
+
+			if *verticalAlignFlag {
+				// For vertical alignment
+				combinedWidth = max(img1.Bounds().Dx(), img2.Bounds().Dx())
+				combinedHeight = img1.Bounds().Dy() + img2.Bounds().Dy()
+			} else {
+				// For horizontal alignment
+				combinedWidth = img1.Bounds().Dx() + img2.Bounds().Dx()
+				combinedHeight = max(img1.Bounds().Dy(), img2.Bounds().Dy())
+			}
+
+			combinedImg := image.NewRGBA(image.Rect(0, 0, combinedWidth, combinedHeight))
+
+			// Copy img1 to combinedImg
+			for y := 0; y < img1.Bounds().Dy(); y++ {
+				for x := 0; x < img1.Bounds().Dx(); x++ {
+					combinedImg.Set(x, y, img1.At(x, y))
+				}
+			}
+
+			if *verticalAlignFlag {
+				// Copy img2 to combinedImg for vertical alignment
+				for y := 0; y < img2.Bounds().Dy(); y++ {
+					for x := 0; x < img2.Bounds().Dx(); x++ {
+						combinedImg.Set(x, y+img1.Bounds().Dy(), img2.At(x, y))
+					}
+				}
+			} else {
+				// Copy img2 to combinedImg for horizontal alignment
+				for y := 0; y < img2.Bounds().Dy(); y++ {
+					for x := 0; x < img2.Bounds().Dx(); x++ {
+						combinedImg.Set(x+img1.Bounds().Dx(), y, img2.At(x, y))
+					}
+				}
+			}
+
+			// Save the combined image
+			combinedImgPath := fmt.Sprintf("combined_%d.png", j)
+			err = imaging.Save(combinedImg, combinedImgPath)
+			if checkError(err) != nil {
+				continue
+			}
+		}
+
 		// Signal that the job is done
 		done <- true
 	}
@@ -133,6 +180,8 @@ func main() {
 	printSizeFlag := flag.String("printsize", "A3", "Size of printed PDF A4,A3,A2...")
 	outputFlag := flag.String("output", "differences.pdf", "the name of the output PDF file")
 	workersFlag := flag.Int("workers", 0, "the number of workers to use. (Default: CPU Count)")
+	sideBySideFlag := flag.Bool("sidebyside", false, "create a side-by-side comparison of the two PDFs")
+	verticalAlignFlag := flag.Bool("verticalalign", false, "align the documents vertically in the combined image")
 
 	// Parse the flags
 	flag.Parse()
@@ -235,7 +284,7 @@ func main() {
 	// Create the workers
 	for w := 1; w <= *workersFlag; w++ {
 		go func(id int) {
-			worker(id, jobs, done, doc1, doc2, mergeFlag, *offsetFlag, *startOffsetFlag, totalOps)
+			worker(id, jobs, done, doc1, doc2, mergeFlag, *offsetFlag, *startOffsetFlag, totalOps, sideBySideFlag, verticalAlignFlag)
 		}(w)
 	}
 
@@ -309,26 +358,70 @@ func main() {
 		fmt.Printf("The difference images have been merged into a PDF (100.00%% completed)\n")
 	}
 
+	if *sideBySideFlag {
+		// Create a new PDF for the combined images
+		pdf := gofpdf.New(*orientationFlag, "mm", *printSizeFlag, "")
+
+		// Number of combined images to process
+		numCombinedImages := max(doc1.NumPage()+*offsetFlag, doc2.NumPage()+*offsetFlag)
+
+		// Loop through all combined images and add them to the PDF
+		for i := 0; i < numCombinedImages; i++ {
+			combinedImgPath := fmt.Sprintf("combined_%d.png", i)
+
+			// Check if the image exists before trying to add it to the PDF
+			if _, err := os.Stat(combinedImgPath); !os.IsNotExist(err) {
+				imgOptions := gofpdf.ImageOptions{
+					ImageType:             "",
+					ReadDpi:               true,
+					AllowNegativePosition: true,
+				}
+				imgInfo := pdf.RegisterImageOptions(combinedImgPath, imgOptions)
+
+				// Convert the image dimensions from points to millimeters (assuming 72 dpi)
+				imgWidthMM := imgInfo.Width() / 2.83465
+				imgHeightMM := imgInfo.Height() / 2.83465
+
+				// Add a new page with the exact size of the image
+				pdf.AddPageFormat("P", gofpdf.SizeType{Wd: imgWidthMM, Ht: imgHeightMM})
+
+				// Add the image to the PDF
+				pdf.ImageOptions(combinedImgPath, 0, 0, imgWidthMM, imgHeightMM, false, imgOptions, 0, "")
+			}
+		}
+
+		// Save the PDF
+		outputCombinedPDF := filepath.Join(filepath.Dir(*outputFlag), "combined_"+filepath.Base(*outputFlag))
+		err := pdf.OutputFileAndClose(outputCombinedPDF)
+		if checkError(err) != nil {
+			return
+		}
+		fmt.Printf("The combined images have been merged into %s\n", outputCombinedPDF)
+	}
+
 	if *cleanFlag {
 		// Get the paths of the difference images.
 		var differenceImagePaths []string
 		for i := 0; i < max(doc1.NumPage()+*offsetFlag, doc2.NumPage()+*offsetFlag); i++ {
 			differenceImagePaths = append(differenceImagePaths, fmt.Sprintf("differences_%d.png", i))
-		}
-
-		// Remove the difference images.
-		for _, imagePath := range differenceImagePaths {
-			err := os.Remove(imagePath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error removing difference image: %v\n", err)
+			if *sideBySideFlag {
+				differenceImagePaths = append(differenceImagePaths, fmt.Sprintf("combined_%d.png", i))
 			}
 		}
 
-		fmt.Println("The difference images have been removed")
+		// Remove the images.
+		for _, imagePath := range differenceImagePaths {
+			err := os.Remove(imagePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error removing image: %v\n", err)
+			}
+		}
+
+		fmt.Println("The images have been removed")
 
 		// Update the count of completed operations and print the progress percentage
 		completedOps++
-		fmt.Printf("The difference images have been removed (%.2f%% completed)\n", float64(completedOps)/float64(totalOps)*100)
+		fmt.Printf("The images have been removed (%.2f%% completed)\n", float64(completedOps)/float64(totalOps)*100)
 	}
 }
 
