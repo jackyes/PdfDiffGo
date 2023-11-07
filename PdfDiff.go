@@ -21,11 +21,11 @@ var mutex = &sync.Mutex{}
 
 // brightness calculates the brightness of a color using the luma formula.
 func brightness(c color.Color) uint32 {
-	r, g, b, _ := c.RGBA()
-	// Precompute the coefficients to avoid recalculating them on every call.
 	const rCoeff = 0.299
 	const gCoeff = 0.587
 	const bCoeff = 0.114
+
+	r, g, b, _ := c.RGBA()
 
 	// Calculate the brightness using the luma formula.
 	return uint32(rCoeff*float32(r) + gCoeff*float32(g) + bCoeff*float32(b))
