@@ -442,9 +442,11 @@ func min(a, b float64) float64 {
 
 // max returns the larger of two int numbers.
 func max(a, b int) int {
-	return int(math.Max(float64(a), float64(b)))
+	if a > b {
+		return a
+	}
+	return b
 }
-
 // checkError prints an error message and returns the error if it is not nil.
 func checkError(err error) error {
 	if err != nil {
