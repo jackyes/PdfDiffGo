@@ -324,30 +324,37 @@ func main() {
 			ReadDpi:               true,
 			AllowNegativePosition: true,
 		}
-		for i := 0; i < max(doc1.NumPage()+*offsetFlag, doc2.NumPage()+*offsetFlag); i++ {
+		doc1Pages := doc1.NumPage()
+		doc2Pages := doc2.NumPage()
+		maxPages := max(doc1Pages+*offsetFlag, doc2Pages+*offsetFlag)
+
+		pdfW, pdfH := pdf.GetPageSize()
+
+		for i := 0; i < maxPages; i++ {
 			pdf.AddPage()
 
-			// Calculate the dimensions of the image so that it fits the PDF page
+			// Assuming each image has a unique path with index i
 			diffImgPath := fmt.Sprintf("differences_%d.png", i)
+
+			// Register each image inside the loop if they are not the same
 			imgInfo := pdf.RegisterImageOptions(diffImgPath, imgOptions)
 			imgW, imgH := imgInfo.Extent()
-			pdfW, pdfH := pdf.GetPageSize()
 			scale := min(pdfW/imgW, pdfH/imgH)
-			imgW *= scale
-			imgH *= scale
+			scaledImgW := imgW * scale
+			scaledImgH := imgH * scale
 
 			// Calculate the position of the image so that it is centered on the page
-			x := (pdfW - imgW) / 2
-			y := (pdfH - imgH) / 2
+			x := (pdfW - scaledImgW) / 2
+			y := (pdfH - scaledImgH) / 2
 
 			// Add the image to the PDF
-			pdf.ImageOptions(diffImgPath, x, y, imgW, imgH, false, imgOptions, 0, "")
+			pdf.ImageOptions(diffImgPath, x, y, scaledImgW, scaledImgH, false, imgOptions, 0, "")
 
-			// Update the progress percentage
-			progress = float64(i+1) / float64(max(doc1.NumPage()+*offsetFlag, doc2.NumPage()+*offsetFlag)) * 100.0
-
-			// Print the progress percentage
-			fmt.Printf("\rProgress: %.2f%%", progress)
+			// Update and print the progress percentage less frequently to improve performance
+			if i%(maxPages/10) == 0 || i == maxPages-1 { // Update every 10% or on the last image
+				progress := float64(i+1) / float64(maxPages) * 100.0
+				fmt.Printf("\rProgress: %.2f%%", progress)
+			}
 		}
 		fmt.Println()
 
