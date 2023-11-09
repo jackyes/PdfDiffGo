@@ -313,8 +313,6 @@ func main() {
 		fmt.Printf("%.2f%% completed\n", float64(completedOps)/float64(totalOps)*100)
 	}
 
-	// Add a progress bar to indicate the progress of the merge
-	progress := 0.0
 	fmt.Printf("Merging difference images...")
 
 	// Add the images to the PDF in the correct order
