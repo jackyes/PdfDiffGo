@@ -21,15 +21,20 @@ var mutex = &sync.Mutex{}
 
 // brightness calculates the brightness of a color using the luma formula.
 func brightness(c color.Color) uint32 {
-	const rCoeff = 0.299
-	const gCoeff = 0.587
-	const bCoeff = 0.114
+	const rCoeff = 299
+	const gCoeff = 587
+	const bCoeff = 114
+	const scale = 1000 // Used to maintain precision in integer operations
 
 	r, g, b, _ := c.RGBA()
 
-	// Calculate the brightness using the luma formula.
-	return uint32(rCoeff*float32(r) + gCoeff*float32(g) + bCoeff*float32(b))
+	// Scale the r, g, and b values to fit into the 0-255 range
+	r, g, b = r>>8, g>>8, b>>8
+
+	// Calculate the brightness using integer arithmetic and the luma formula
+	return (rCoeff*r + gCoeff*g + bCoeff*b) / scale
 }
+
 
 // worker is a function that will be run in a separate goroutine. It processes jobs from the jobs channel and sends a signal to the done channel when it finishes a job.
 // It takes images from two PDF documents and compares them, creating a new image that highlights the differences.
