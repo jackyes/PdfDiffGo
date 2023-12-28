@@ -349,9 +349,11 @@ func main() {
 			pdf.ImageOptions(diffImgPath, x, y, scaledImgW, scaledImgH, false, imgOptions, 0, "")
 
 			// Update and print the progress percentage less frequently to improve performance
-			if i%(maxPages/10) == 0 || i == maxPages-1 { // Update every 10% or on the last image
-				progress := float64(i+1) / float64(maxPages) * 100.0
-				fmt.Printf("\rProgress: %.2f%%", progress)
+			if maxPages > 10 {
+				if i%(maxPages/10) == 0 || i == maxPages-1 { // Update every 10% or on the last image
+					progress := float64(i+1) / float64(maxPages) * 100.0
+					fmt.Printf("\rProgress: %.2f%%", progress)
+				}
 			}
 		}
 		fmt.Println()
