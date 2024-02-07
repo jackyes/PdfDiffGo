@@ -92,15 +92,17 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 
 		// Create an image to show the differences
 		diffImg := image.NewRGBA(img1.Bounds())
-		for y := 0; y < img1.Bounds().Dy(); y++ {
-			for x := 0; x < img1.Bounds().Dx(); x++ {
+		for y := img1.Bounds().Min.Y; y < img1.Bounds().Max.Y; y++ {
+			for x := img1.Bounds().Min.X; x < img1.Bounds().Max.X; x++ {
 				c1 := img1.At(x, y)
 				c2 := img2.At(x, y)
 				// Check if the pixels at the same position in both images are different
 				if c1 != c2 {
 					// If the pixels are different, color the pixel depending on which image has the brighter pixel
 					// The brightness is calculated as the sum of the squares of the RGB components
-					if brightness(c1) > brightness(c2) {
+					b1 := brightness(c1)
+					b2 := brightness(c2)
+					if b1 > b2 {
 						// If the pixel in the first image is brighter, color the pixel in the difference image red
 						diffImg.Set(x, y, color.RGBA{255, 0, 0, 255}) // red for image 1
 					} else {
