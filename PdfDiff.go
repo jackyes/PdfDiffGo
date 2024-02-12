@@ -19,22 +19,24 @@ import (
 // Mutex to avoid race conditions when multiple goroutines access the same memory
 var mutex = &sync.Mutex{}
 
-// brightness calculates the brightness of a color using the luma formula.
-func brightness(c color.Color) uint32 {
-	const rCoeff = 299
-	const gCoeff = 587
-	const bCoeff = 114
-	const scale = 1000 // Used to maintain precision in integer operations
-
+// Brightness calculates the perceived brightness of a color. It uses an algorithm that approximates human perception
+func brightness(c color.Color) uint8 {
 	r, g, b, _ := c.RGBA()
 
-	// Scale the r, g, and b values to fit into the 0-255 range
-	r, g, b = r>>8, g>>8, b>>8
+	// Scale RGB values down if they're larger than the maximum possible value for a byte in Go (which is 65535 or 0xFFFF). This can happen when dealing with unpremultiplied alpha images where each color component may be greater than 255.
+	const maxUint16 = 65535
+	if r > maxUint16 {
+		r >>= 8 // Shift right by 8 bits to divide the value by 256, effectively dividing it into bytes (0-255). This is equivalent of "r /= 256" but with bitwise operations.
+	}
+	if g > maxUint16 {
+		g >>= 8 // Shift right by 8 bits to divide the value by 256, effectively dividing it into bytes (0-255). This is equivalent of "g /= 256" but with bitwise operations.
+	}
+	if b > maxUint16 {
+		b >>= 8 // Shift right by 8 bits to divide the value by 256, effectively dividing it into bytes (0-255). This is equivalent of "b /= 256" but with bitwise operations.
+	}
 
-	// Calculate the brightness using integer arithmetic and the luma formula
-	return (rCoeff*r + gCoeff*g + bCoeff*b) / scale
+	return uint8((r*19595 + g*38470 + b*7471) >> 16) // Perform the brightness calculation using integer arithmetic to maintain precision and avoid floating point calculations, which are slower in Go compared with bitwise operations. The coefficients used here (19595 for red, 38470 for green, and 7471 for blue) were chosen based on a study of human color perception that approximates the luma or luminance value more accurately than simple calculations would suggest.
 }
-
 
 // worker is a function that will be run in a separate goroutine. It processes jobs from the jobs channel and sends a signal to the done channel when it finishes a job.
 // It takes images from two PDF documents and compares them, creating a new image that highlights the differences.
@@ -451,6 +453,7 @@ func max(a, b int) int {
 	}
 	return b
 }
+
 // checkError prints an error message and returns the error if it is not nil.
 func checkError(err error) error {
 	if err != nil {
