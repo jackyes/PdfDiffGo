@@ -127,10 +127,10 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 		if checkError(err) != nil {
 			continue
 		}
-
+		// Save the combined image in the same page if sidebyside enabled
 		if *sideBySideFlag {
 			var combinedWidth, combinedHeight int
-
+			//Combine imege verticaly or horizontally 
 			if *verticalAlignFlag {
 				// For vertical alignment
 				combinedWidth = max(img1.Bounds().Dx(), img2.Bounds().Dx())
