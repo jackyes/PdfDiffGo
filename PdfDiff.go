@@ -80,30 +80,41 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 		}
 
 		// Create an image to show the differences
-		diffImg := image.NewRGBA(img1.Bounds())
-		for y := img1.Bounds().Min.Y; y < img1.Bounds().Max.Y; y++ {
-			for x := img1.Bounds().Min.X; x < img1.Bounds().Max.X; x++ {
-				c1 := img1.At(x, y)
-				c2 := img2.At(x, y)
-				// Check if the pixels at the same position in both images are different
-				if c1 != c2 {
-					// If the pixels are different, color the pixel depending on which image has the brighter pixel
-					// The brightness is calculated as the sum of the squares of the RGB components
-					b1 := brightness(c1)
-					b2 := brightness(c2)
-					if b1 > b2 {
-						// If the pixel in the first image is brighter, color the pixel in the difference image red
-						diffImg.Set(x, y, color.RGBA{255, 0, 0, 255}) // red for image 1
-					} else {
-						// If the pixel in the second image is brighter, color the pixel in the difference image blue
-						diffImg.Set(x, y, color.RGBA{0, 0, 255, 255}) // blue for image 2
+		bounds := img1.Bounds()
+		diffImg := image.NewRGBA(bounds)
+		parallelism := 2 // Number of Goroutines to use
+		var wg sync.WaitGroup
+
+		for p := 0; p < parallelism; p++ {
+			wg.Add(1)
+			go func(p int) {
+				defer wg.Done()
+				for y := bounds.Min.Y + p; y < bounds.Max.Y; y += parallelism {
+					for x := bounds.Min.X; x < bounds.Max.X; x++ {
+						c1 := img1.At(x, y)
+						c2 := img2.At(x, y)
+						// Check if the pixels at the same position in both images are different
+						if c1 != c2 {
+							// If the pixels are different, color the pixel depending on which image has the brighter pixel
+							// The brightness is calculated as the sum of the squares of the RGB components
+							b1 := brightness(c1)
+							b2 := brightness(c2)
+							if b1 > b2 {
+								// If the pixel in the first image is brighter, color the pixel in the difference image red
+								diffImg.Set(x, y, color.RGBA{255, 0, 0, 255}) // red for image 1
+							} else {
+								// If the pixel in the second image is brighter, color the pixel in the difference image blue
+								diffImg.Set(x, y, color.RGBA{0, 0, 255, 255}) // blue for image 2
+							}
+						} else {
+							// If the pixels are the same, use the original pixel in the difference image
+							diffImg.Set(x, y, c1)
+						}
 					}
-				} else {
-					// If the pixels are the same, use the original pixel in the difference image
-					diffImg.Set(x, y, c1)
 				}
-			}
+			}(p)
 		}
+		wg.Wait()
 
 		// Save the difference image
 		diffImgPath := fmt.Sprintf("differences_%d.png", j)
@@ -117,7 +128,7 @@ func worker(id int, jobs <-chan int, done chan<- bool, doc1 *fitz.Document, doc2
 		// Save the combined image in the same page if sidebyside enabled
 		if *sideBySideFlag {
 			var combinedWidth, combinedHeight int
-			//Combine imege verticaly or horizontally 
+			//Combine imege verticaly or horizontally
 			if *verticalAlignFlag {
 				// For vertical alignment
 				combinedWidth = max(img1.Bounds().Dx(), img2.Bounds().Dx())
@@ -319,6 +330,11 @@ func main() {
 
 		pdfW, pdfH := pdf.GetPageSize()
 
+		progressInterval := maxPages / 10
+		if progressInterval == 0 {
+			progressInterval = 1
+		}
+
 		for i := 0; i < maxPages; i++ {
 			pdf.AddPage()
 
@@ -340,11 +356,9 @@ func main() {
 			pdf.ImageOptions(diffImgPath, x, y, scaledImgW, scaledImgH, false, imgOptions, 0, "")
 
 			// Update and print the progress percentage less frequently to improve performance
-			if maxPages > 10 {
-				if i%(maxPages/10) == 0 || i == maxPages-1 { // Update every 10% or on the last image
-					progress := float64(i+1) / float64(maxPages) * 100.0
-					fmt.Printf("\rProgress: %.2f%%", progress)
-				}
+			if i%progressInterval == 0 || i == maxPages-1 {
+				progress := float64(i+1) / float64(maxPages) * 100.0
+				fmt.Printf("\rProgress: %.2f%%", progress)
 			}
 		}
 		fmt.Println()
