@@ -22,19 +22,6 @@ var mutex = &sync.Mutex{}
 // Brightness calculates the perceived brightness of a color. It uses an algorithm that approximates human perception
 func brightness(c color.Color) uint8 {
 	r, g, b, _ := c.RGBA()
-
-	// Scale RGB values down if they're larger than the maximum possible value for a byte in Go (which is 65535 or 0xFFFF). This can happen when dealing with unpremultiplied alpha images where each color component may be greater than 255.
-	const maxUint16 = 65535
-	if r > maxUint16 {
-		r >>= 8 // Shift right by 8 bits to divide the value by 256, effectively dividing it into bytes (0-255). This is equivalent of "r /= 256" but with bitwise operations.
-	}
-	if g > maxUint16 {
-		g >>= 8 // Shift right by 8 bits to divide the value by 256, effectively dividing it into bytes (0-255). This is equivalent of "g /= 256" but with bitwise operations.
-	}
-	if b > maxUint16 {
-		b >>= 8 // Shift right by 8 bits to divide the value by 256, effectively dividing it into bytes (0-255). This is equivalent of "b /= 256" but with bitwise operations.
-	}
-
 	return uint8((r*19595 + g*38470 + b*7471) >> 16) // Perform the brightness calculation using integer arithmetic to maintain precision and avoid floating point calculations, which are slower in Go compared with bitwise operations. The coefficients used here (19595 for red, 38470 for green, and 7471 for blue) were chosen based on a study of human color perception that approximates the luma or luminance value more accurately than simple calculations would suggest.
 }
 
